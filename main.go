@@ -2,11 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -23,15 +24,34 @@ type clientMultiServer struct {
 	ServerPassword [][3]string `json:"server_password"`
 }
 
+var url string
+var h bool
+
+func init() {
+	flag.BoolVar(&h, "h", false, "this help")
+
+	flag.StringVar(&url, "url", "https://fast.ishadowx.net", "需要爬虫的网站地址。")
+}
 func main() {
+	flag.Parse()
+
+	if h {
+		flag.Usage()
+		fmt.Scanf("%s")
+		return
+	}
+
 	cms := clientMultiServer{}
 	cms.LocalPort = 1080
 	var brookCmd string
 	ssrs := make([]ssr, 0, 20)
+	//Cookie:_ga=GA1.2.104527843.1524205208; _gid=GA1.2.190482586.1524789574
+	//https://fast.ishadowx.net/  isx.yt     dwz.pm/x
 
-	doc, err := newDocument("https://free.ishadowx.net")
+	doc, err := newDocument(url)
 	if err != nil {
 		fmt.Println("create Document error.")
+		return
 	}
 	// Find the review items
 	doc.Find(".portfolio-item").Each(func(i int, s *goquery.Selection) {
@@ -74,15 +94,30 @@ func main() {
 	if ioutil.WriteFile("brook.bat", []byte(brookCmd), 0644) != nil {
 		fmt.Println("写入brook.bat失败!")
 	}
-	time.Sleep(5000000000)
+	//time.Sleep(5000000000) //5s
+	fmt.Scanf("%s")
 }
 
 func newDocument(url string) (*goquery.Document, error) {
-	// Load the URL
-	res, e := http.Get(url) //根据url获取该网页的内容  res
-	if e != nil {
-		return nil, e
+	client := &http.Client{}
+
+	req, err := http.NewRequest("POST", url, nil)
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.98 Safari/537.36 LBBROWSER")
+
+	resp, err := client.Do(req)
+
+	if err != nil {
+		return nil, err
 	}
-	defer res.Body.Close()
-	return goquery.NewDocumentFromResponse(res)
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 200 {
+		return goquery.NewDocumentFromReader(resp.Body)
+	} else {
+		return nil, errors.New("返回码不是200。")
+	}
+
+	//return goquery.NewDocumentFromResponse(resp)
 }
